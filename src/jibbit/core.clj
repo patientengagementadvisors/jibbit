@@ -7,15 +7,16 @@
             [jibbit.util :as util]
             [jibbit.report :as report])
   (:import
-   (com.google.cloud.tools.jib.api Jib Containerizer LogEvent JibContainerBuilder)
-   (com.google.cloud.tools.jib.api.buildplan ImageFormat)
-   (com.google.cloud.tools.jib.api.buildplan AbsoluteUnixPath 
-                                             FileEntriesLayer 
-                                             OwnershipProvider
-                                             Port
-                                             FileEntriesLayer$Builder)
-   (java.io File)
-   (java.util.function Consumer)))
+    (com.google.cloud.tools.jib.api Jib Containerizer LogEvent JibContainerBuilder)
+    (com.google.cloud.tools.jib.api.buildplan ImageFormat Platform)
+    (com.google.cloud.tools.jib.api.buildplan AbsoluteUnixPath
+                                              FileEntriesLayer
+                                              OwnershipProvider
+                                              Port
+                                              FileEntriesLayer$Builder)
+    (java.io File)
+    (java.util Set)
+    (java.util.function Consumer)))
 
 (defn docker-path 
   "params
@@ -143,10 +144,18 @@
               main-opts
               ["-m" (pr-str main)]))))))
 
+(defn add-target-arch
+  [^JibContainerBuilder b arches]
+  (let [platforms (into #{} (map (fn [{:keys [os arch]}]
+                                   (Platform. arch os)))
+                        arches)]
+    (.setPlatforms b platforms)))
+
 (defn add-file-entries-layer
   "build one layer"
   [^JibContainerBuilder b {layer-name :name build-layer :fn}]
   (.addFileEntriesLayer b (.build
+
                            (doto (FileEntriesLayer/builder)
                              (.setName layer-name)
                              build-layer))))
@@ -214,7 +223,7 @@
          else copy source/resource paths too
      - try to set a non-root user
      - add org.opencontainer LABEL image metadata from current HEAD commit"
-  [{:keys [git-url base-image target-image working-dir tags debug allow-insecure-registries env-vars exposed-ports]
+  [{:keys [git-url base-image target-image target-arch working-dir tags debug allow-insecure-registries env-vars exposed-ports]
     :or {base-image {:image-name "gcr.io/distroless/java"
                      :type :registry}
          target-image {:type :tar}
@@ -239,6 +248,7 @@
      (as-> c
          (doseq [jib-port (seq (make-jib-exposed-ports exposed-ports))]
            (.addExposedPort c jib-port)))
+     (add-target-arch target-arch)
      (add-all-layers! (clojure-app-layers (-> c
                                               (assoc :working-dir working-dir)
                                               (merge (user-group-ownership c)))))
