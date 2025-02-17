@@ -147,8 +147,7 @@
 (defn add-target-arch
   [^JibContainerBuilder b arches]
   (let [platforms (into #{} (map (fn [{:keys [os arch]}]
-                                   (Platform. arch os)))
-                        arches)]
+                                   (Platform. arch os)) arches))]
     (.setPlatforms b platforms)))
 
 (defn add-file-entries-layer
